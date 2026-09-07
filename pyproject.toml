@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "fraud-detection"
+version = "0.1.0"
+description = "Real-time Banking Fraud Detection Pipeline"
+authors = ["LuisXoo-C"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+kafka-python-ng = ">=2.2.2"
+faker = ">=24.0.0"
+pydantic = ">=2.6.0"
+minio = ">=7.2.0"
+clickhouse-connect = ">=0.7.0"
+geopy = ">=2.4.1"
+python-dotenv = ">=1.0.1"
+
+[tool.poetry.group.spark.dependencies]
+pyspark = ">=3.5.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
