@@ -1,0 +1,119 @@
+  ### 1. ¿Qué hace realmente el Partition Key en Kafka? (El problema del orden)
+
+  Imagina que Kafka es una oficina de correos con 3 ventanillas (Partición 0, Partición 1, Partición 2).
+
+  • Si envías mensajes SIN clave (sin Partition Key):
+  Kafka usa Round-Robin:
+      • Mensaje 1 va a la Ventanilla 0.
+      • Mensaje 2 va a la Ventanilla 1.
+      • Mensaje 3 va a la Ventanilla 2.
+  El desastre bancario:
+  Digamos que la cuenta ACC-1001 hace dos operaciones:
+      1. 10:00:00 -> Retiro de $500 (en Ventanilla 0).
+      2. 10:00:01 -> Intento de retiro de $500 con saldo agotado (en Ventanilla 1).
+  Como cada partición se consume en paralelo por hilos o servidores distintos, el consumidor de la Ventanilla 1
+  podría procesar su mensaje antes que la Ventanilla 0. El sistema diría: "Operación rechazada por falta de fondos" y
+  luego "Operación aprobada de $500". El orden se destruyó.
+  • Si envías mensajes CON Partition Key (key = account_id):
+  Kafka aplica una función matemática llamada hash:
+
+    partición = hash (account\_id) pmod total\_particiones
+
+  Como el hash de "ACC-1001" siempre da el mismo número, todas las transacciones de esa cuenta van siempre a la misma
+  ventanilla (partición).
+
+  │ La regla de oro de Kafka: Kafka solo garantiza orden estricto de mensajes dentro de una misma partición, jamás
+  │ entre particiones diferentes. Por eso, en finanzas, la clave siempre debe ser el ID de la entidad cuyo orden
+  │ cronológico te importa (cuenta, usuario o tarjeta).
+  ──────
+  ### 2. ¿Por qué una Ventana Deslizante (Sliding Window) y no una Fija (Tumbling Window)?
+
+  Para detectar ataques de velocidad (Velocity Attack): "Si una tarjeta hace más de 3 compras en menos de 1 minuto,
+  bloquea".
+
+  #### A) Ventana Fija (Tumbling Window)
+
+  El tiempo se divide en bloques rígidos que no se solapan:
+  [10:00:00 - 10:01:00], [10:01:00 - 10:02:00], etc.
+
+  La vulnerabilidad del atacante:
+
+  • Transacción 1: 10:00:58
+  • Transacción 2: 10:00:59
+  • (Termina la ventana 1, el contador vuelve a cero)
+  • Transacción 3: 10:01:01
+  • Transacción 4: 10:01:02
+
+  En la Ventana 1 hubo 2 transacciones. En la Ventana 2 hubo 2 transacciones. Como el límite era 3, el sistema dice:
+  "Todo bien, ninguna ventana pasó de 3".
+  El atacante metió 4 transacciones en solo 4 segundos y tu sistema no se enteró.
+
+  #### B) Ventana Deslizante (Sliding Window)
+
+  La ventana evalúa: "En los últimos 60 segundos contando hacia atrás desde este milisegundo exacto".
+
+  • Cuando llega la Transacción 4 a las 10:01:02, mira hacia atrás hasta 10:00:02.
+  • Encuentra las 4 transacciones dentro de ese rango de 60 segundos.
+  • Salta la alarma de fraude inmediatamente.
+  ──────
+  ### 3. ¿Por qué WSL2 se tragó 16 GB de RAM? (Memoria de proceso vs Buffer/Cache de Linux)
+
+  En Windows, cuando un programa termina, libera la RAM inmediatamente.
+  En el kernel de Linux no funciona así.
+
+  Linux tiene una filosofía histórica: "RAM no utilizada es RAM desperdiciada".
+  Linux divide la memoria en dos categorías:
+
+  1. Memoria de procesos (Anon / RSS): La memoria viva que los programas (Python, Kafka, ClickHouse) necesitan para
+  existir.
+  2. Buffer / Page Cache: Cuando compilas una imagen de Docker, Docker lee y escribe gigabytes de capas en disco.
+  Linux guarda una copia de todos esos archivos leídos en la RAM por si los vuelves a necesitar más tarde.
+
+  ¿Por qué colapsó tu PC?
+  WSL2 es una máquina virtual completa de Linux corriendo dentro de Windows.
+
+  • Los procesos de Docker solo estaban usando ~1.8 GB reales.
+  • Pero durante el build de Docker, Linux usó ~14 GB en Page Cache.
+  • El kernel de Linux no le avisa a Windows "ya no necesito esto, tómalo de vuelta", sino que lo retiene por si
+  acaso.
+  • Windows vio que la máquina virtual de WSL pidió 16 GB y se los dio hasta dejar a tu máquina sin aliento.
+
+  ¿Cómo lo solucionamos como ingenieros?
+  Creamos .wslconfig con:
+
+    [wsl2]
+    memory=6GB
+
+  Le dijiste al hipervisor de Windows: "No me importa cuánto caché quiera retener Linux, no le permitas crecer a más
+  de 6 GB bajo ninguna circunstancia".
+  ──────
+  ### 4. ¿Dónde busca un Senior en la documentación oficial para no perderse?
+
+  El novato busca en Google: "código de python para detectar imposible travel kafka". Encuentra 5 tutoriales
+  obsoletos de Medium de hace 4 años que ya no funcionan con las versiones actuales.
+
+  El Senior busca especificaciones de arquitectura directo en la fuente:
+
+  1. Apache Kafka Documentation:
+      • No busca tutoriales; va a la sección Kafka Connect o Broker Configs y busca parámetros concretos como
+      acks=all, min.insync.replicas o auto.create.topics.enable.
+  2. PySpark Documentation (Structured Streaming Programming Guide):
+      • Va a la tabla oficial de operaciones de soporte: busca "Operations on streaming DataFrames/Datasets" para ver
+      si la función que quiere usar soporta Watermarking o si requiere applyInPandasWithState.
+  3. ClickHouse Docs:
+      • Va directo a Engines -> MergeTree Family para entender cómo funciona ORDER BY y por qué las claves primarias
+      en ClickHouse no garantizan unicidad como en MySQL, sino orden físico en disco.
+
+  ──────
+  ### La moraleja
+
+  Fíjate que en toda esta explicación no escribimos ni una sola línea de código.
+
+  El trabajo de un Senior ocurre aquí, en entender el movimiento del agua por la tubería:
+
+  • Si la tubería se congela (orden), usas Partition Key.
+  • Si la tubería tiene fugas temporales (trampas en bordes de tiempo), usas Sliding Window.
+  • Si el contenedor del agua se desborda (RAM), entiendes el Page Cache del sistema operativo.
+
+  El código solo es la herramienta para plasmar estas decisiones. Ya estás entendiendo los porqués; el resto es pura
+  práctica.
