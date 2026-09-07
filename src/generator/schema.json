@@ -1,0 +1,94 @@
+﻿{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TransactionEvent",
+  "description": "Contrato formal de datos para eventos transaccionales bancarios en Kafka",
+  "type": "object",
+  "required": [
+    "transaction_id",
+    "account_id",
+    "timestamp",
+    "amount",
+    "currency",
+    "transaction_type",
+    "merchant",
+    "location",
+    "device"
+  ],
+  "properties": {
+    "transaction_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identificador único global de la transacción"
+    },
+    "account_id": {
+      "type": "string",
+      "pattern": "^ACC-[0-9]{4,8}$",
+      "description": "Identificador de la cuenta bancaria (usado como partition key en Kafka)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Marca temporal UTC en formato ISO-8601 con milisegundos"
+    },
+    "amount": {
+      "type": "number",
+      "minimum": 0.01,
+      "description": "Monto de la transacción"
+    },
+    "currency": {
+      "type": "string",
+      "enum": ["USD", "EUR", "MXN", "GBP", "CAD"],
+      "description": "Moneda estandarizada ISO-4217"
+    },
+    "transaction_type": {
+      "type": "string",
+      "enum": ["PURCHASE", "ATM_WITHDRAWAL", "TRANSFER_OUT", "ONLINE_PAYMENT"],
+      "description": "Tipo de operación bancaria"
+    },
+    "merchant": {
+      "type": "object",
+      "required": ["merchant_id", "name", "category"],
+      "properties": {
+        "merchant_id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": ["GROCERY", "ELECTRONICS", "LUXURY_GOODS", "TRAVEL", "GAMBLING", "RESTAURANT", "CASH_ADVANCE"]
+        }
+      }
+    },
+    "location": {
+      "type": "object",
+      "required": ["latitude", "longitude", "city", "country"],
+      "properties": {
+        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+        "city": { "type": "string" },
+        "country": { "type": "string", "minLength": 2, "maxLength": 2 }
+      }
+    },
+    "device": {
+      "type": "object",
+      "required": ["device_id", "ip_address", "channel"],
+      "properties": {
+        "device_id": { "type": "string" },
+        "ip_address": { "type": "string" },
+        "channel": {
+          "type": "string",
+          "enum": ["MOBILE_APP", "WEB_BROWSER", "POS_TERMINAL", "ATM"]
+        }
+      }
+    },
+    "simulation_metadata": {
+      "type": "object",
+      "description": "Metadata interna de la simulación (para evaluar métricas y validaciones)",
+      "properties": {
+        "is_simulated_fraud": { "type": "boolean" },
+        "anomaly_type": {
+          "type": ["string", "null"],
+          "enum": [null, "NONE", "IMPOSSIBLE_TRAVEL", "VELOCITY_ATTACK", "HIGH_AMOUNT_BURST"]
+        }
+      }
+    }
+  }
+}
