@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+# Instalar JRE (requerido por PySpark) y utilidades de proceso
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    default-jre-headless \
+    procps \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Instalar Poetry
+RUN pip install --no-cache-dir poetry \
+    && poetry config virtualenvs.create false
+
+# Copiar dependencias
+COPY pyproject.toml README.md ./
+
+# Instalar todas las dependencias
+RUN poetry install --no-root --no-interaction --no-ansi --without dev
+
+# Copiar c?digo fuente
+COPY src/ ./src/
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+ENV CLICKHOUSE_HOST=clickhouse
+ENV CLICKHOUSE_PORT=8123
+
+CMD ["python", "-m", "src.streaming.pipeline"]
