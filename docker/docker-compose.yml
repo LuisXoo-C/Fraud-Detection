@@ -153,6 +153,38 @@ services:
       EVENTS_PER_SECOND: 5.0
       FRAUD_RATIO: 0.15
 
+  # -------------------------------------------------------------
+  # 6. Consumidor Capa Bronze (Volcado crudo continuo a MinIO)
+  # -------------------------------------------------------------
+  bronze-consumer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.generator
+    container_name: fraud-bronze-consumer
+    networks:
+      - fraud-network
+    command: ["python", "-m", "src.bronze.bronze_consumer"]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on:
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      TOPIC_TRANSACTIONS: financial-transactions
+      BRONZE_CONSUMER_GROUP: bronze-s3-ingestion-group
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadminpassword
+      MINIO_BUCKET_NAME: bronze
+      MINIO_SECURE: "false"
+      BRONZE_BATCH_SIZE: 500
+      BRONZE_FLUSH_INTERVAL: 30
+
 networks:
   fraud-network:
     name: fraud-network
