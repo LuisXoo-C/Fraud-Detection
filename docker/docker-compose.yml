@@ -102,7 +102,7 @@ services:
       "
 
   # -------------------------------------------------------------
-  # 4. ClickHouse
+  # 4. ClickHouse (Capa Gold: Alertas & Historial)
   # -------------------------------------------------------------
   clickhouse:
     image: clickhouse/clickhouse-server:latest
@@ -154,7 +154,7 @@ services:
       FRAUD_RATIO: 0.15
 
   # -------------------------------------------------------------
-  # 6. Consumidor Capa Bronze (Volcado crudo continuo a MinIO)
+  # 6. Consumidor Capa Bronze (Volcado crudo a MinIO)
   # -------------------------------------------------------------
   bronze-consumer:
     build:
@@ -184,6 +184,34 @@ services:
       MINIO_SECURE: "false"
       BRONZE_BATCH_SIZE: 500
       BRONZE_FLUSH_INTERVAL: 30
+
+  # -------------------------------------------------------------
+  # 7. Motor de Streaming PySpark (Capa Silver & Detecci?n de Fraude)
+  # -------------------------------------------------------------
+  spark-streaming:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.spark
+    container_name: fraud-spark-streaming
+    networks:
+      - fraud-network
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      TOPIC_TRANSACTIONS: financial-transactions
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: clickhouse123
+      CLICKHOUSE_DB: fraud_db
 
 networks:
   fraud-network:
